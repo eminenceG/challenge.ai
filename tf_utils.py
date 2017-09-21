@@ -1,21 +1,33 @@
+import math
+import numpy as np
+import h5py
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.python.framework import ops
 
-# coding: utf-8
+def create_placeholders(n_x, n_y):
+    """
+    Creates the placeholders for the tensorflow session.
+    
+    Arguments:
+    n_x -- scalar, size of an image vector (num_px * num_px = 64 * 64 * 3 = 12288)
+    n_y -- scalar, number of classes (from 0 to 5, so -> 6)
+    
+    Returns:
+    X -- placeholder for the data input, of shape [n_x, None] and dtype "float"
+    Y -- placeholder for the input labels, of shape [n_y, None] and dtype "float"
+    
+    Tips:
+    - You will use None because it let's us be flexible on the number of examples you will for the placeholders.
+      In fact, the number of examples during test/train is different.
+    """
 
-# In[163]:
-
-# import math
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import tensorflow as tf
-# from tensorflow.python.framework import ops
-from tf_utils import create_placeholders, random_mini_batches
-
-
-get_ipython().magic('matplotlib inline')
-np.random.seed(1)
-
-
-# In[76]:
+    ### START CODE HERE ### (approx. 2 lines)
+    X = tf.placeholder(tf.float32, shape=(n_x, None), name = 'X' )
+    Y = tf.placeholder(tf.float32, shape=(n_y, None), name = 'Y' )
+    ### END CODE HERE ###
+    
+    return X, Y
 
 def random_mini_batches(X, Y, mini_batch_size = 64, seed = 0):
     """
@@ -57,50 +69,6 @@ def random_mini_batches(X, Y, mini_batch_size = 64, seed = 0):
     
     return mini_batches
 
-
-# In[3]:
-
-data = np.loadtxt(open("data/20170910/ai_challenger_stock_train_20170910/stock_train_data_20170910.csv", "rb"), delimiter=",", skiprows=1)
-
-
-# In[11]:
-
-m = data.shape[0]
-
-# Shuffle data
-permutation = list(np.random.permutation(m))
-shuffled_data = data[permutation, :]
-
-
-# In[85]:
-
-X = data[:, 1:89]
-weight = data[:, 89]
-Y = data[:, 90]
-Y = np.reshape(Y, (1, m))
-group = data[:, 91]
-era = data[:, 91]
-
-
-# In[86]:
-
-# get train set and dev set(10000 data)
-train_X = X.T[:, 0 : m-10000]
-dev_X = X.T[:, m-10000:]
-
-train_Y = Y[:, 0:m-10000]
-dev_Y = Y[:, m-10000:]
-
-
-# In[87]:
-
-X, Y = create_placeholders(88, 1)
-print ("X = " + str(X))
-print ("Y = " + str(Y))
-
-
-# In[64]:
-
 def initialize_parameters():
     """
     Initializes parameters to build a neural network with tensorflow. The shapes are:
@@ -136,19 +104,6 @@ def initialize_parameters():
     return parameters
 
 
-# In[65]:
-
-tf.reset_default_graph()
-with tf.Session() as sess:
-    parameters = initialize_parameters()
-    print("W1 = " + str(parameters["W1"]))
-    print("b1 = " + str(parameters["b1"]))
-    print("W2 = " + str(parameters["W2"]))
-    print("b2 = " + str(parameters["b2"]))
-
-
-# In[68]:
-
 def forward_propagation(X, parameters):
     """
     Implements the forward propagation for the model: LINEAR -> RELU -> LINEAR -> RELU -> LINEAR -> SOFTMAX
@@ -180,19 +135,33 @@ def forward_propagation(X, parameters):
     
     return Z3
 
+def compute_cost_with_regularization(Z3, Y, parameters, lambd, m):
+    """
+    Computes the cost
+    
+    Arguments:
+    Z3 -- output of forward propagation (output of the last LINEAR unit), of shape (6, number of examples)
+    Y -- "true" labels vector placeholder, same shape as Z3
+    
+    Returns:
+    cost - Tensor of the cost function
+    """
+    
+    # to fit the tensorflow requirement for tf.nn.softmax_cross_entropy_with_logits(...,...)
+    logits = tf.transpose(Z3)
+    labels = tf.transpose(Y)
 
-# In[70]:
+    W1 = parameters["W1"]
+    W2 = parameters["W2"]
+    W3 = parameters["W3"]
 
-tf.reset_default_graph()
-
-with tf.Session() as sess:
-    X, Y = create_placeholders(88, 1)
-    parameters = initialize_parameters()
-    Z3 = forward_propagation(X, parameters)
-    print("Z3 = " + str(Z3))
-
-
-# In[71]:
+    l2 = lambd / 2 * (tf.reduce_sum(tf.square(W1)) + tf.reduce_sum(tf.square(W2)) + tf.reduce_sum(tf.square(W3))) / m
+    
+    ### START CODE HERE ### (1 line of code)
+    cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = logits, labels = labels)) + l2
+    ### END CODE HERE ###
+    
+    return cost
 
 def compute_cost(Z3, Y):
     """
@@ -215,21 +184,6 @@ def compute_cost(Z3, Y):
     ### END CODE HERE ###
     
     return cost
-
-
-# In[73]:
-
-tf.reset_default_graph()
-
-with tf.Session() as sess:
-    X, Y = create_placeholders(88, 1)
-    parameters = initialize_parameters()
-    Z3 = forward_propagation(X, parameters)
-    cost = compute_cost(Z3, Y)
-    print("cost = " + str(cost))
-
-
-# In[89]:
 
 def model(X_train, Y_train, X_test, Y_test, learning_rate = 0.0001,
           num_epochs = 1500, minibatch_size = 256, print_cost = True):
@@ -274,7 +228,8 @@ def model(X_train, Y_train, X_test, Y_test, learning_rate = 0.0001,
     
     # Cost function: Add cost function to tensorflow graph
     ### START CODE HERE ### (1 line)
-    cost = compute_cost(Z3, Y)
+    #cost = compute_cost(Z3, Y)
+    cost = compute_cost_with_regularization(Z3, Y, parameters, 0.01, m)
     ### END CODE HERE ###
     
     # Backpropagation: Define the tensorflow optimizer. Use an AdamOptimizer.
@@ -330,7 +285,7 @@ def model(X_train, Y_train, X_test, Y_test, learning_rate = 0.0001,
         print ("Parameters have been trained!")
 
         # Calculate the correct predictions
-        correct_prediction = tf.equal(tf.argmax(Z3), tf.argmax(Y))
+        correct_prediction = tf.equal(tf.sigmoid(Z3) > 0.5, Y > 0.5)
 
         # Calculate accuracy on the test set
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
@@ -339,92 +294,3 @@ def model(X_train, Y_train, X_test, Y_test, learning_rate = 0.0001,
         print ("Test Accuracy:", accuracy.eval({X: X_test, Y: Y_test}))
         
         return parameters
-
-
-# In[90]:
-
-parameters = model(train_X, train_Y, dev_X, dev_Y)
-
-
-# In[150]:
-
-correct_prediction = tf.equal(tf.argmax(Z3), tf.argmax(Y))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-print("Train Accuracy:", accuracy.eval({X: X_train, Y: Y_train}))
-print("Test Accuracy:", accuracy.eval({X: X_test, Y: Y_test}))
-
-
-# In[120]:
-
-def relu(x):
-    """
-    Compute the relu of x
-
-    Arguments:
-    x -- A scalar or numpy array of any size.
-
-    Return:
-    s -- relu(x)
-    """
-    s = np.maximum(0,x)
-    
-    return s
-
-def sigmoid(x):
-    """
-    Compute the sigmoid of x
-
-    Arguments:
-    x -- A scalar or numpy array of any size.
-
-    Return:
-    s -- sigmoid(x)
-    """
-    s = 1/(1+np.exp(-x))
-    return s
-
-
-# In[123]:
-
-W1 = parameters['W1']
-b1 = parameters['b1']
-W2 = parameters['W2']
-b2 = parameters['b2']
-W3 = parameters['W3']
-b3 = parameters['b3']
-
-Z1 = np.dot(W1, test_X) + b1
-A1 = relu(Z1)
-Z2 = np.dot(W2, A1) + b2
-A2 = relu(Z2)
-Z3 = np.dot(W3, A2) + b3
-A3 = sigmoid(Z3)
-
-
-# In[161]:
-
-data_id = test_data[:, 0]
-print(A3.shape)
-data_id = np.reshape(data_id, (1, A3.shape[1]))
-
-res = np.concatenate((data_id, A3), axis=0)
-print(res.shape)
-
-print(res[:][0:100])
-
-
-# In[162]:
-
-df = pd.DataFrame(res.T)
-df.to_csv('test.csv', columns=[0,1])
-
-
-# In[151]:
-
-
-
-
-# In[ ]:
-
-
-
